@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8">
+  <title>🎤 Tamil Website Builder</title>
+  <style>
+    #progress-container {
+      width: 100%;
+      background: #eee;
+      height: 25px;
+      border-radius: 5px;
+      margin: 10px 0;
+      overflow: hidden;
+    }
+    #progress-bar {
+      width: 0%;
+      background: #4caf50;
+      height: 100%;
+      color: white;
+      text-align: center;
+      line-height: 25px;
+      font-size: 14px;
+      transition: width 0.3s ease;
+    }
+
+  </style>
+</head>
+<body>
+  <h2>🎤 Speak in Tamil about the Website You Want</h2>
+  <div id="progress-container">
+    <div id="progress-bar">0%</div>
+  </div>
+
+  <button onclick="startListening()">🎙️ Start Mic</button>
+  <p id="tamil-output">📝 Tamil: </p>
+  <p id="intent-output">🎯 Intent: </p>
+  <p id="result-output">📦 Result: </p>
+  <!-- New buttons for viewing and downloading -->
+  <button id="view-site-btn" style="display:none;" onclick="viewWebsite()">👁️ View Website</button>
+  <button id="download-btn" style="display:none;" onclick="downloadSite()">⬇️ Download Generated Site</button>
+
+
+  <script>
+    function updateProgress(percent, label) {
+
+      const bar = document.getElementById('progress-bar');
+      bar.style.width = percent + '%';
+      bar.textContent = label ? `${percent}% - ${label}` : percent + '%';
+    }
+
+
+    function startListening() {
+      updateProgress(0, 'Waiting for speech...');
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = 'ta-IN'; // Tamil
+      recognition.interimResults = false;
+      recognition.continuous = true;
+    
+
+      
+
+      recognition.onresult = function(event) {
+         const results = event.results;
+         const transcript = results[results.length - 1][0].transcript.trim();
+
+  //   Ignore empty speech
+        if (!transcript) return;
+        const tamilText = transcript;
+        document.getElementById("tamil-output").innerText = "📝 Tamil: " + tamilText;
+        updateProgress(20, 'Tamil recognized');  // Reset buttons visibility
+        document.getElementById("view-site-btn").style.display = 'none';
+        document.getElementById("download-btn").style.display = 'none';
+        // Step 1: Send to /intent
+        fetch('/intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tamilText })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const intent = data.intent;
+            document.getElementById("intent-output").innerText = "🎯 Intent: " + intent;
+            updateProgress(50, 'Intent detected');
+            // Step 2: Send to /generate-code
+            return fetch('/generate-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ intent })
+            });
+          } else {
+            throw new Error("Intent detection failed");
+          }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            document.getElementById("result-output").innerHTML =
+            "📦 Code files generated:<br>" +
+            data.files.join("<br>");
+            
+            updateProgress(80, 'Code generated');
+
+            document.getElementById("view-site-btn").style.display = 'inline-block';
+            document.getElementById("download-btn").style.display = 'inline-block';
+            
+            updateProgress(100, 'Ready to view and download');
+ 
+          } else {
+            document.getElementById("result-output").innerText =
+              "❌ Code generation failed: " + data.error;
+            updateProgress(0, 'Failed');  
+            
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          document.getElementById("result-output").innerText = "❌ Error occurred";
+          updateProgress(0, 'Error');
+        });
+      };
+
+      recognition.onerror = function(event) {
+        alert("Speech recognition error: " + event.error);
+        updateProgress(0, 'Speech recognition error');
+      };
+
+      recognition.start();
+    }
+     function viewWebsite() {
+      window.open('/preview/index.html', '_blank');
+    }
+
+    // Triggers download of zipped generated-site folder
+    function downloadSite() {
+      window.location.href = '/download';
+    }
+  </script>
+</body>
+</html>
